@@ -1,0 +1,108 @@
+name: Windows-Build
+
+on:
+  push:
+    tags: ['*']
+  workflow_dispatch:
+
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  Windows-Build:
+    runs-on: windows-2022
+    strategy:
+      matrix:
+        include:
+          - arch: x64
+            rust_triple: x86_64-pc-windows-msvc
+        fail-fast: false
+
+    env:
+      RUST_TARGET_TRIPLE: ${{matrix.rust_triple}}
+      ARCH: ${{matrix.arch}}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Installing Node
+      uses: actions/setup-node@v4.4.0
+      with:
+        node-version: 22
+
+    - run: rustup target add ${{matrix.rust_triple}}
+
+    - name: Update node-gyp
+      run: |
+        npm install --global node-gyp@10.2.0
+        npm prefix -g | % {npm config set node_gyp "$_\node_modules\node-gyp\bin\node-gyp.js"}
+
+    - name: Download Visual C++ Redistributable
+      shell: bash
+      run: |
+        curl -sSL -o build/vc_redist.exe "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+        ls -la build/vc_redist.exe
+
+    - name: Build
+      shell: powershell
+      run: |
+        npm i -g yarn node-gyp
+        yarn --network-timeout 1000000
+        yarn run build
+        node scripts/prepackage-plugins.mjs
+      env:
+        ARCH: ${{matrix.arch}}
+
+    - name: Build packages
+      run: node scripts/build-windows.mjs
+      env:
+        ARCH: ${{matrix.arch}}
+
+    - name: Add VC Runtime to portable zip
+      shell: powershell
+      env:
+        ARCH: ${{matrix.arch}}
+      run: |
+        mkdir "vc-runtime" -Force | Out-Null
+        $crtDir = Get-ChildItem "C:\Program Files\Microsoft Visual Studio\2022\*\VC\Redist\MSVC\*\x64\Microsoft.VC*.CRT" -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($crtDir) {
+          @("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll") | ForEach-Object {
+            $src = Join-Path $crtDir.FullName $_
+            if (Test-Path $src) {
+              Copy-Item $src "vc-runtime/"
+            }
+          }
+        }
+        $portableZip = Get-ChildItem dist/*-portable-*.zip | Select-Object -First 1
+        if ($portableZip) {
+          Add-Type -AssemblyName System.IO.Compression
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::Open($portableZip.FullName, [System.IO.Compression.ZipArchiveMode]::Update)
+          Get-ChildItem "vc-runtime" -Filter "*.dll" | ForEach-Object {
+            [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $_.FullName, $_.Name) | Out-Null
+          }
+          $zip.Dispose()
+        }
+
+    - name: Package artifacts
+      run: |
+        mkdir artifact-setup
+        mv dist/*-setup-*.exe artifact-setup/
+        mkdir artifact-portable
+        mv dist/*-portable-*.zip artifact-portable/
+
+    - uses: actions/upload-artifact@master
+      name: Upload installer
+      with:
+        name: Windows installer (${{matrix.arch}})
+        path: artifact-setup
+
+    - uses: actions/upload-artifact@master
+      name: Upload portable build
+      with:
+        name: Windows portable build (${{matrix.arch}})
+        path: artifact-portable
