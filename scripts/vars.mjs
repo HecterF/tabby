@@ -1,6 +1,5 @@
 import * as path from 'path'
 import * as fs from 'fs'
-import * as semver from 'semver'
 import * as childProcess from 'child_process'
 
 process.env.ARCH = ((process.env.ARCH || process.arch) === 'arm') ? 'armv7l' : (process.env.ARCH || process.arch)
@@ -10,13 +9,8 @@ const __dirname = url.fileURLToPath(new URL('.', import.meta.url))
 
 const electronInfo = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../node_modules/electron/package.json')))
 
-export let version = childProcess.execSync('git describe --tags', { encoding:'utf-8' })
-version = version.substring(1).trim()
-version = version.replace('-', '-c')
-
-if (version.includes('-c')) {
-    version = semver.inc(version, 'prepatch').replace('-0', `-nightly.${process.env.REV ?? 0}`)
-}
+export let version = childProcess.execSync('git describe --tags --abbrev=0', { encoding:'utf-8' })
+version = version.substring(1).trim() + '-HT'
 
 export const builtinPlugins = [
     'tabby-core',
