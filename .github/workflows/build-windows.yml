@@ -9,6 +9,9 @@ concurrency:
   group: windows-build-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   Windows-Build:
     runs-on: windows-2022
@@ -106,3 +109,12 @@ jobs:
       with:
         name: Windows portable build (${{matrix.arch}})
         path: artifact-portable
+
+    - name: Upload assets to GitHub Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          artifact-setup/*.exe
+          artifact-portable/*.zip
+        fail_on_unmatched_files: true
