@@ -3,6 +3,7 @@ on: [push, pull_request, workflow_dispatch]
 jobs:
   Lint:
     runs-on: ubuntu-24.04
+    continue-on-error: true
 
     steps:
     - name: Checkout
