@@ -287,6 +287,31 @@ export class XTermFrontend extends Frontend {
         })
     }
 
+    /**
+     * Some voice IMEs (e.g. WeChat IME voice input) emit internal keydown
+     * events with key === 'Unidentified' while an IME composition is
+     * active. xterm's CompositionHelper treats any keydown other than
+     * 229/16/17/18 during composition as a real key and finalizes the
+     * composition immediately, sending the intermediate recognition text
+     * to the PTY; the subsequent compositionend then sends the full text
+     * again, so voice input ends up duplicated. Wrap the composition
+     * helper's keydown handler to ignore such internal keydowns while
+     * composing.
+     */
+    private installVoiceImeDuplicationWorkaround (): void {
+        const compositionHelper: any = (this.xtermCore as any)?._compositionHelper
+        if (!compositionHelper || typeof compositionHelper.keydown !== 'function') {
+            return
+        }
+        const origKeydown: (ev: KeyboardEvent) => boolean = compositionHelper.keydown.bind(compositionHelper)
+        compositionHelper.keydown = (ev: KeyboardEvent): boolean => {
+            if (compositionHelper.isComposing && ev.key === 'Unidentified') {
+                return false
+            }
+            return origKeydown(ev)
+        }
+    }
+
     private isAtBottom (): boolean {
         const buffer = this.xterm.buffer.active
         return buffer.viewportY >= buffer.baseY - 1
@@ -301,6 +326,8 @@ export class XTermFrontend extends Frontend {
 
         this.xterm.open(host)
         this.opened = true
+
+        this.installVoiceImeDuplicationWorkaround()
 
         // Work around font loading bugs
         await new Promise(resolve => setTimeout(resolve, this.hostApp.platform === Platform.Web ? 1000 : 0))
