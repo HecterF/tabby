@@ -20,7 +20,6 @@ jobs:
         include:
           - arch: x64
             rust_triple: x86_64-pc-windows-msvc
-        fail-fast: false
 
     env:
       RUST_TARGET_TRIPLE: ${{matrix.rust_triple}}
