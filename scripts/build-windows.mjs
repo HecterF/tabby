@@ -25,7 +25,7 @@ builder({
                 provider: 'github',
                 channel: `latest-${process.env.ARCH}`,
             },
-        ] : undefined,
+        ] : null,
         forceCodeSigning: !!keypair,
         win: {
             signtoolOptions: {

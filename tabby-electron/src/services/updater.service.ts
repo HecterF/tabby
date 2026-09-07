@@ -22,6 +22,11 @@ export class ElectronUpdaterService extends UpdaterService {
         super()
         this.logger = log.create('updater')
 
+        if (this.electron.app.getVersion().includes('-HT')) {
+            this.electronUpdaterAvailable = false
+            return
+        }
+
         if (process.platform === 'linux' || process.env.PORTABLE_EXECUTABLE_FILE) {
             this.electronUpdaterAvailable = false
             return
@@ -58,6 +63,10 @@ export class ElectronUpdaterService extends UpdaterService {
     }
 
     async check (): Promise<boolean> {
+        if (this.electron.app.getVersion().includes('-HT')) {
+            this.logger.info('Updates are disabled for custom builds')
+            return false
+        }
         if (this.electronUpdaterAvailable) {
             return new Promise((resolve, reject) => {
                 // eslint-disable-next-line @typescript-eslint/init-declarations, prefer-const
